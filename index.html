@@ -11,15 +11,15 @@
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="favicon.ico">
 
-  <meta name="description" content="civx — what's up ☺︎">
+  <meta name="description" content="civx — heya!">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://civx.lol/">
   <meta property="og:title" content="civx">
   <meta property="og:description" content="heya!">
   <meta property="og:image" content="https://civx.lol/stickerbomb.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
+  <meta property="og:image:width" content="2500">
+  <meta property="og:image:height" content="1438">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#f59409">
   <style>
@@ -117,6 +117,7 @@
       place-items: center;
       background: rgba(4, 8, 22, 0.55);
       backdrop-filter: blur(3px);
+      cursor: pointer;
       transition: opacity 0.55s ease, backdrop-filter 0.55s ease;
     }
 
@@ -236,7 +237,6 @@
       top: 0.35em;
       width: 0.09em;
       height: auto;
-      image-rendering: pixelated;
       pointer-events: none;
       transform: translate(-50%, -50%);
       animation: spin 14s linear infinite;
@@ -373,8 +373,12 @@
       width: 92px;
       height: 3px;
       margin: 0;
+      padding: 11px 0;
+      box-sizing: content-box;
+      background-clip: content-box;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.32);
+      cursor: pointer;
     }
 
     .volume input:focus-visible {
@@ -437,27 +441,8 @@
         display: none;
       }
 
-      .grain,
-      .vignette {
-        position: fixed;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-      }
-
       .grain {
-        background-image: url("grain.png");
-        background-repeat: repeat;
-        background-size: 128px 128px;
-        opacity: 0.16;
-        mix-blend-mode: overlay;
-      }
-
-      .vignette {
-        background: radial-gradient(ellipse at center,
-            rgba(0, 0, 0, 0) 45%,
-            rgba(0, 0, 0, 0.1) 72%,
-            rgba(0, 0, 0, 0.26) 100%);
+        display: none;
       }
 
       #viz {
@@ -487,35 +472,9 @@
         opacity: 1;
       }
 
-      .socials {
-        display: flex;
-        align-items: center;
-        gap: 13px;
-        margin-top: 0.9em;
-        opacity: 0;
-      }
-
-      .socials a {
-        display: block;
-        line-height: 0;
-      }
-
-      .socials img {
-        height: 19px;
-        width: auto;
-        display: block;
-        opacity: 0.82;
-        filter: drop-shadow(0 1px 10px rgba(0, 0, 0, 0.35));
-        transition: opacity 0.2s ease, transform 0.2s ease;
-      }
-
-      .socials a:hover img {
-        opacity: 1;
-        transform: scale(1.12);
-      }
-
       body.entered .socials {
-        animation: emerge 1s cubic-bezier(0.22, 0.61, 0.36, 1) 0.7s forwards;
+        animation: none;
+        opacity: 1;
       }
 
       body.entered .tagline {
@@ -541,7 +500,7 @@
 
   <div class="center">
     <h1 class="wordmark" id="wordmark">c<span class="glyph">i<img class="star" src="star.png" alt="" aria-hidden="true"
-          draggable="false"></span>vx<img class="buddy" src="" alt="" aria-hidden="true" draggable="false"></h1>
+          draggable="false"></span>vx</h1>
     <p class="tagline">what's up? </p>
     <div class="socials">
       <a href="https://github.com/starophrenicc" target="_blank" rel="noopener noreferrer">
@@ -596,10 +555,12 @@
     track.src = TRACKS[Math.floor(Math.random() * TRACKS.length)];
 
     const volumeUi = document.getElementById("volumeUi");
+    let gainNode = null;
 
     function syncVolume() {
       const v = volume.value / 100;
       track.volume = v;
+      if (gainNode) gainNode.gain.value = v;
       whoosh.volume = Math.min(1, v * 2.8);
       volumeUi.dataset.level = v === 0 ? "0" : v < 0.5 ? "1" : "2";
     }
@@ -664,10 +625,13 @@
       try {
         const audio = new (window.AudioContext || window.webkitAudioContext)();
         const source = audio.createMediaElementSource(track);
+        gainNode = audio.createGain();
+        gainNode.gain.value = volume.value / 100;
         analyser = audio.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.82;
-        source.connect(analyser);
+        source.connect(gainNode);
+        gainNode.connect(analyser);
         analyser.connect(audio.destination);
         audio.resume();
 
@@ -725,7 +689,7 @@
       bctx.translate(s.x, s.y);
       bctx.rotate(s.r);
 
-      bctx.font = "700 " + s.size + "px 'Helvetica Neue', Helvetica, Arial, sans-serif";
+      bctx.font = "700 " + s.size + "px 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif";
       const tw = bctx.measureText(s.text).width;
       const pw = Math.max(tw + s.size * 0.9, CX * 1.25);
       const ph = Math.max(s.size * 1.5, CY * 1.45);
@@ -819,14 +783,13 @@
     window.addEventListener("resize", debounce(fillTickers, 200));
 
     const TITLE = "civx";
-    const HOLD = 4;
-    const REST = 2;
+    const MARK = "\u2731";
+    const HOLD = 5;
 
     const frames = [];
-    for (let i = 1; i <= TITLE.length; i++) frames.push(TITLE.slice(0, i));
+    for (let i = 0; i <= TITLE.length; i++) frames.push(TITLE.slice(0, i) + MARK + TITLE.slice(i));
+    for (let i = TITLE.length - 1; i > 0; i--) frames.push(TITLE.slice(0, i) + MARK + TITLE.slice(i));
     for (let i = 0; i < HOLD; i++) frames.push(TITLE);
-    for (let i = TITLE.length - 1; i >= 1; i--) frames.push(TITLE.slice(0, i));
-    for (let i = 0; i < REST; i++) frames.push("\u3164");
 
     let step = 0;
 
