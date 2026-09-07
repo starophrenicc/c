@@ -229,16 +229,22 @@
 
     .wordmark .glyph {
       position: relative;
+      display: inline-block;
+      letter-spacing: normal;
+      margin-right: -0.03em;
     }
 
     .wordmark .star {
       position: absolute;
-      left: 57%;
+      left: 50%;
       top: 0.35em;
       width: 0.09em;
       height: auto;
       pointer-events: none;
       transform: translate(-50%, -50%);
+    }
+
+    body.entered .wordmark .star {
       animation: spin 14s linear infinite;
     }
 
@@ -463,7 +469,7 @@
         animation: none;
       }
 
-      .wordmark .star {
+      body.entered .wordmark .star {
         animation: none;
       }
 
