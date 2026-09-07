@@ -797,13 +797,13 @@
     for (let i = TITLE.length - 1; i > 0; i--) frames.push(TITLE.slice(0, i) + MARK + TITLE.slice(i));
     for (let i = 0; i < HOLD; i++) frames.push(TITLE);
 
-    let step = 0;
+    const STEP_MS = 260;
+    const started = Date.now();
 
     setInterval(() => {
-      if (document.hidden) return;
-      document.title = frames[step % frames.length];
-      step++;
-    }, 260);
+      const i = Math.floor((Date.now() - started) / STEP_MS) % frames.length;
+      document.title = frames[i];
+    }, STEP_MS);
   </script>
 
 </body>
