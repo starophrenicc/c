@@ -873,6 +873,7 @@
     const meadowEl = document.getElementById("meadow");
     const buddyEl = document.getElementById("buddy");
     let meadowMode = false;
+    let titleFrames = ["civx"];
     let buddyAnim = null;
 
     let buddyX = null;
@@ -905,6 +906,7 @@
         setFavicon("favicon-green.ico");
         VIZ_COLORS = VIZ_GREEN;
         if (gradient) resize();
+        titleFrames = buildTitleFrames(TITLE_MEADOW);
 
         track.pause();
         if (audioCtx && gainNode && !meadowSrc) {
@@ -927,6 +929,7 @@
         setFavicon("favicon.ico");
         VIZ_COLORS = VIZ_ORANGE;
         if (gradient) resize();
+        titleFrames = buildTitleFrames(TITLE_ORANGE);
 
         meadowTrack.pause();
         track.play().catch(() => { });
@@ -1001,21 +1004,25 @@
     fillTickers();
     window.addEventListener("resize", debounce(fillTickers, 200));
 
-    const TITLE = "civx";
-    const MARK = "\u2731";
-    const HOLD = 5;
+    const TITLE_ORANGE = { text: "civx", mark: "\☀️", hold: 5 };
+    const TITLE_MEADOW = { text: "civx", mark: "\🌱", hold: 5 };
 
-    const frames = [];
-    for (let i = 0; i <= TITLE.length; i++) frames.push(TITLE.slice(0, i) + MARK + TITLE.slice(i));
-    for (let i = TITLE.length - 1; i > 0; i--) frames.push(TITLE.slice(0, i) + MARK + TITLE.slice(i));
-    for (let i = 0; i < HOLD; i++) frames.push(TITLE);
+    function buildTitleFrames(cfg) {
+      const f = [];
+      for (let i = 0; i <= cfg.text.length; i++) f.push(cfg.text.slice(0, i) + cfg.mark + cfg.text.slice(i));
+      for (let i = cfg.text.length - 1; i > 0; i--) f.push(cfg.text.slice(0, i) + cfg.mark + cfg.text.slice(i));
+      for (let i = 0; i < cfg.hold; i++) f.push(cfg.text);
+      return f;
+    }
+
+    titleFrames = buildTitleFrames(TITLE_ORANGE);
 
     const STEP_MS = 260;
     const started = Date.now();
 
     setInterval(() => {
-      const i = Math.floor((Date.now() - started) / STEP_MS) % frames.length;
-      document.title = frames[i];
+      const i = Math.floor((Date.now() - started) / STEP_MS) % titleFrames.length;
+      document.title = titleFrames[i];
     }, STEP_MS);
   </script>
 
