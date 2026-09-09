@@ -41,6 +41,18 @@
         url("space-grotesk-latin-700-normal.woff") format("woff");
     }
 
+    :root {
+      --star-x: 95%;
+      --star-y: 0.47em;
+      --star-size: 0.09em;
+
+      --star-green-x: 95%;
+      --star-green-y: 0.47em;
+      --star-green-size: 0.09em;
+
+      --wordmark-align: -0.155em;
+    }
+
     html,
     body {
       height: 100%;
@@ -60,6 +72,16 @@
       font-family: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
 
+    #bg,
+    #meadow,
+    #buddy,
+    .wordmark .star,
+    .socials img {
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+
     #bg {
       position: fixed;
       inset: 0;
@@ -67,6 +89,17 @@
       height: 100%;
       object-fit: cover;
       z-index: -2;
+      transition: opacity 0.8s ease;
+    }
+
+    #meadow {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -3;
+      opacity: 0;
     }
 
     .grain,
@@ -150,12 +183,33 @@
       pointer-events: none;
     }
 
+    #buddy {
+      position: fixed;
+      bottom: 28%;
+      width: 90px;
+      height: auto;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+      border-radius: 8px;
+    }
+
+    body.meadow #buddy {
+      opacity: 1;
+    }
+
     #bomb {
       position: fixed;
       inset: 0;
       z-index: 20;
       pointer-events: none;
-      transition: opacity 0.5s ease;
+      background: transparent;
+      transition: opacity 0.5s ease, background 0.45s ease;
+    }
+
+    #bomb.filling {
+      background: #f59409;
     }
 
     #bomb.clear {
@@ -166,12 +220,35 @@
       display: grid;
       justify-items: center;
       transform: translateY(-5vh);
+      transition: all 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+
+    body.meadow {
+      background: #316010;
+    }
+
+    body.meadow .wordmark {
+      margin-left: var(--wordmark-align);
+    }
+
+    body.meadow .wordmark .star {
+      left: var(--star-green-x);
+      top: var(--star-green-y);
+      width: var(--star-green-size);
+    }
+
+    body.meadow .center {
+      position: fixed;
+      left: 6vw;
+      top: 50%;
+      justify-items: start;
+      transform: translateY(-50%);
     }
 
     .wordmark {
       position: relative;
       margin: 0;
-      font-size: clamp(3rem, 14vw, 12rem);
+      font-size: clamp(2.1rem, 9.8vw, 8.4rem);
       font-weight: 700;
       letter-spacing: -0.03em;
       color: #fff;
@@ -181,7 +258,7 @@
     }
 
     .tagline {
-      margin: 0.4em 0 0;
+      margin: 0.1em 0 0;
       font-size: clamp(0.95rem, 2.2vw, 1.4rem);
       font-weight: 500;
       letter-spacing: 0.02em;
@@ -195,7 +272,7 @@
       display: flex;
       align-items: center;
       gap: 13px;
-      margin-top: 0.9em;
+      margin-top: 0.55em;
       opacity: 0;
     }
 
@@ -236,12 +313,16 @@
 
     .wordmark .star {
       position: absolute;
-      left: 50%;
-      top: 0.35em;
-      width: 0.09em;
+      left: var(--star-x);
+      top: var(--star-y);
+      width: var(--star-size);
       height: auto;
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: pointer;
       transform: translate(-50%, -50%);
+      padding: 0.12em;
+      margin: -0.12em;
+      box-sizing: content-box;
     }
 
     body.entered .wordmark .star {
@@ -496,6 +577,8 @@
   <video id="bg" autoplay muted loop playsinline poster="poster.jpg">
     <source src="bg.mp4" type="video/mp4">
   </video>
+  <img id="meadow" src="meadow.jpg" alt="" aria-hidden="true">
+  <img id="buddy" src="buddy.jpg" alt="" aria-hidden="true">
 
   <canvas id="viz" aria-hidden="true"></canvas>
 
@@ -539,6 +622,7 @@
 
   <audio id="jaydes" preload="none" loop></audio>
   <audio id="whoosh" src="whoosh.mp3" preload="auto"></audio>
+  <audio id="meadowtrack" src="firstdate.mp3" preload="none" loop></audio>
 
   <div class="enter" id="enter" role="button" tabindex="0" aria-label="Enter">
     <p>click anywhere</p>
@@ -562,10 +646,14 @@
 
     const volumeUi = document.getElementById("volumeUi");
     let gainNode = null;
+    let audioCtx = null;
+    let meadowSrc = null;
+    const meadowTrack = document.getElementById("meadowtrack");
 
     function syncVolume() {
       const v = volume.value / 100;
       track.volume = v;
+      meadowTrack.volume = v;
       if (gainNode) gainNode.gain.value = v;
       whoosh.volume = Math.min(1, v * 2.8);
       volumeUi.dataset.level = v === 0 ? "0" : v < 0.5 ? "1" : "2";
@@ -584,6 +672,9 @@
     }
 
     const ctx = canvas.getContext("2d");
+    const VIZ_ORANGE = ["#ffffff", "#fff2dc", "#ffc078"];
+    const VIZ_GREEN = ["#ffffff", "#e2ffd4", "#5cc93a"];
+    let VIZ_COLORS = VIZ_ORANGE;
     let analyser, bins, gradient, W, H;
 
     function resize() {
@@ -594,9 +685,9 @@
       canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       gradient = ctx.createLinearGradient(0, H * 0.1, 0, H);
-      gradient.addColorStop(0, "#ffffff");
-      gradient.addColorStop(0.5, "#fff2dc");
-      gradient.addColorStop(1, "#ffc078");
+      gradient.addColorStop(0, VIZ_COLORS[0]);
+      gradient.addColorStop(0.5, VIZ_COLORS[1]);
+      gradient.addColorStop(1, VIZ_COLORS[2]);
     }
 
     function draw() {
@@ -630,6 +721,7 @@
     function startSpectrum() {
       try {
         const audio = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx = audio;
         const source = audio.createMediaElementSource(track);
         gainNode = audio.createGain();
         gainNode.gain.value = volume.value / 100;
@@ -652,6 +744,10 @@
 
     const bomb = document.getElementById("bomb");
     const bctx = bomb.getContext("2d");
+
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('700 32px "Space Grotesk"');
+    }
 
     const STICKERS = [".civx", "JamL"];
     const CX = 104;
@@ -683,30 +779,26 @@
       return list;
     }
 
-    function pill(x, y, w, h, r) {
-      bctx.beginPath();
-      if (bctx.roundRect) bctx.roundRect(x, y, w, h, r);
-      else bctx.rect(x, y, w, h);
-      bctx.fill();
-    }
+    let BOMB_ACCENT = "#f59409";
 
-    function drawSticker(s) {
-      bctx.save();
-      bctx.translate(s.x, s.y);
-      bctx.rotate(s.r);
-
-      bctx.font = "700 " + s.size + "px 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif";
-      const tw = bctx.measureText(s.text).width;
-      const pw = Math.max(tw + s.size * 0.9, CX * 1.25);
-      const ph = Math.max(s.size * 1.5, CY * 1.45);
-      bctx.fillStyle = s.alt ? "#f59409" : "#ffffff";
-      pill(-pw / 2, -ph / 2, pw, ph, s.size * 0.3);
-      bctx.fillStyle = s.alt ? "#ffffff" : "#f59409";
-      bctx.textAlign = "center";
-      bctx.textBaseline = "middle";
-      bctx.fillText(s.text, 0, 1);
-
-      bctx.restore();
+    function drawSticker(ctx, st) {
+      ctx.save();
+      ctx.translate(st.x, st.y);
+      ctx.rotate(st.r);
+      ctx.font = "700 " + st.size + "px 'Space Grotesk','Helvetica Neue',Helvetica,Arial,sans-serif";
+      const tw = ctx.measureText(st.text).width;
+      const pw = Math.max(tw + st.size * 0.9, CX * 1.25);
+      const ph = Math.max(st.size * 1.5, CY * 1.45);
+      ctx.fillStyle = st.alt ? BOMB_ACCENT : "#ffffff";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-pw / 2, -ph / 2, pw, ph, st.size * 0.3);
+      else ctx.rect(-pw / 2, -ph / 2, pw, ph);
+      ctx.fill();
+      ctx.fillStyle = st.alt ? "#ffffff" : BOMB_ACCENT;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(st.text, 0, 1);
+      ctx.restore();
     }
 
     function runBomb(done) {
@@ -720,11 +812,13 @@
       bomb.style.height = H + "px";
       bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+      requestAnimationFrame(() => bomb.classList.add("filling"));
+
       const list = buildStickers(W, H);
       let i = 0;
 
       (function step() {
-        for (let k = 0; k < PER_FRAME && i < list.length; k++, i++) drawSticker(list[i]);
+        for (let k = 0; k < PER_FRAME && i < list.length; k++, i++) drawSticker(bctx, list[i]);
         if (i < list.length) requestAnimationFrame(step);
         else done();
       })();
@@ -758,8 +852,116 @@
       });
     }
 
+    document.addEventListener("contextmenu", e => {
+      if (e.target.closest("a")) return;
+      e.preventDefault();
+    });
+
     enter.addEventListener("click", enterSite);
     document.addEventListener("keydown", enterSite);
+
+    const starEl = document.querySelector(".wordmark .star");
+    const meadowEl = document.getElementById("meadow");
+    const buddyEl = document.getElementById("buddy");
+    let meadowMode = false;
+    let buddyAnim = null;
+
+    let buddyX = null;
+
+    function walkBuddy() {
+      if (buddyAnim) clearTimeout(buddyAnim);
+      const minX = window.innerWidth * 0.35;
+      const maxX = window.innerWidth * 0.62;
+      const targetX = minX + Math.random() * (maxX - minX);
+      const nowX = buddyEl.getBoundingClientRect().left;
+
+      if (Math.abs(targetX - nowX) > 6) {
+        buddyEl.style.transform = targetX > nowX ? "scaleX(-1)" : "scaleX(1)";
+      }
+      buddyX = targetX;
+
+      const dur = 2.5 + Math.random() * 3;
+      buddyEl.style.transition = "left " + dur + "s ease-in-out, opacity 0.6s ease";
+      buddyEl.style.left = targetX + "px";
+      buddyAnim = setTimeout(walkBuddy, dur * 1000 + 600 + Math.random() * 2000);
+    }
+
+    function toggleMeadow() {
+      meadowMode = !meadowMode;
+      if (meadowMode) {
+        document.getElementById("bg").style.opacity = "0";
+        meadowEl.style.opacity = "1";
+        document.body.classList.add("meadow");
+        if (starEl) starEl.src = "stargreen.png";
+        VIZ_COLORS = VIZ_GREEN;
+        if (gradient) resize();
+
+        track.pause();
+        if (audioCtx && gainNode && !meadowSrc) {
+          try {
+            meadowSrc = audioCtx.createMediaElementSource(meadowTrack);
+            meadowSrc.connect(gainNode);
+          } catch (e) { }
+        }
+        meadowTrack.play().catch(() => { });
+        buddyX = window.innerWidth * 0.5;
+        buddyEl.style.left = buddyX + "px";
+        buddyEl.style.transform = "scaleX(1)";
+        buddyEl.style.transition = "opacity 0.6s ease";
+        walkBuddy();
+      } else {
+        document.getElementById("bg").style.opacity = "1";
+        meadowEl.style.opacity = "0";
+        document.body.classList.remove("meadow");
+        if (starEl) starEl.src = "star.png";
+        VIZ_COLORS = VIZ_ORANGE;
+        if (gradient) resize();
+
+        meadowTrack.pause();
+        track.play().catch(() => { });
+        if (buddyAnim) { clearTimeout(buddyAnim); buddyAnim = null; }
+      }
+    }
+
+    if (starEl) {
+      starEl.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!entered) return;
+
+        whoosh.currentTime = 0;
+        whoosh.play().catch(() => { });
+
+        BOMB_ACCENT = meadowMode ? "#f59409" : "#14b51f";
+
+        const nb = document.createElement("canvas");
+        nb.setAttribute("aria-hidden", "true");
+        nb.style.cssText = "position:fixed;inset:0;z-index:22;pointer-events:none;background:transparent;transition:opacity 0.5s ease,background 0.45s ease";
+        document.body.appendChild(nb);
+        requestAnimationFrame(() => { nb.style.background = BOMB_ACCENT; });
+        const nctx = nb.getContext("2d");
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const W = window.innerWidth, H = window.innerHeight;
+        nb.width = W * dpr;
+        nb.height = H * dpr;
+        nb.style.width = W + "px";
+        nb.style.height = H + "px";
+        nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const list = buildStickers(W, H);
+        let si = 0;
+
+        (function step() {
+          for (let k = 0; k < PER_FRAME && si < list.length; k++, si++) drawSticker(nctx, list[si]);
+          if (si < list.length) {
+            requestAnimationFrame(step);
+          } else {
+            toggleMeadow();
+            setTimeout(() => { nb.style.opacity = "0"; }, 300);
+            setTimeout(() => nb.remove(), 900);
+          }
+        })();
+      });
+    }
 
     volume.addEventListener("input", syncVolume);
 
@@ -778,9 +980,9 @@
 
     function fillTickers() {
       document.querySelectorAll(".ticker .row, .ticker-top .row").forEach(row => {
-        if (row.scrollWidth / 2 >= window.innerWidth) return;
         row.innerHTML = tickerUnit;
-        while (row.scrollWidth < window.innerWidth) row.innerHTML += tickerUnit;
+        let guard = 0;
+        while (row.scrollWidth < window.innerWidth && guard++ < 40) row.innerHTML += tickerUnit;
         row.innerHTML += row.innerHTML;
       });
     }

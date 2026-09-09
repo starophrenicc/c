@@ -145,6 +145,22 @@
       transform: scale(1.05);
     }
 
+    body {
+      cursor: url("cursor.png") 1 1, auto;
+    }
+
+    ::selection {
+      background: #f59409;
+      color: #000;
+    }
+
+    #trail-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       #bg {
         display: none;
@@ -177,6 +193,7 @@
 
   <div class="vignette" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
+  <canvas id="trail-canvas" aria-hidden="true"></canvas>
 
   <div class="center">
     <h1 class="code">404</h1>
@@ -184,6 +201,45 @@
     <a class="home" href="/">go back</a>
   </div>
 
+  <script>
+    (function () {
+      const tc = document.getElementById("trail-canvas");
+      const tx = tc.getContext("2d");
+      let tw = 0, th = 0;
+      const particles = [];
+
+      function resizeTrail() {
+        tw = tc.width = window.innerWidth;
+        th = tc.height = window.innerHeight;
+      }
+      resizeTrail();
+      window.addEventListener("resize", resizeTrail);
+
+      let mx = -999, my = -999;
+      window.addEventListener("mousemove", e => { mx = e.clientX; my = e.clientY; });
+
+      function spawnParticle() {
+        if (mx < 0) return;
+        particles.push({ x: mx, y: my, vx: (Math.random()-0.5)*1.2, vy: (Math.random()-0.5)*1.2-0.5, r: 3+Math.random()*3, life: 1, decay: 0.045+Math.random()*0.03 });
+      }
+
+      let acc = 0;
+      (function loop() {
+        requestAnimationFrame(loop);
+        tx.clearRect(0, 0, tw, th);
+        if (++acc % 2 === 0) spawnParticle();
+        for (let i = particles.length-1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.life -= p.decay;
+          if (p.life <= 0) { particles.splice(i, 1); continue; }
+          tx.beginPath();
+          tx.arc(p.x, p.y, p.r*p.life, 0, Math.PI*2);
+          tx.fillStyle = "rgba(245,148,9,"+p.life*0.7+")";
+          tx.fill();
+        }
+      })();
+    })();
+  </script>
 </body>
 
 </html>
