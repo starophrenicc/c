@@ -647,6 +647,15 @@
     const volumeUi = document.getElementById("volumeUi");
     let gainNode = null;
     let audioCtx = null;
+
+    function setFavicon(href) {
+      document.querySelectorAll('link[rel="icon"]').forEach(l => l.remove());
+      const l = document.createElement("link");
+      l.rel = "icon";
+      l.href = href + "?v=" + Date.now();
+      document.head.appendChild(l);
+    }
+
     let meadowSrc = null;
     const meadowTrack = document.getElementById("meadowtrack");
 
@@ -893,6 +902,7 @@
         meadowEl.style.opacity = "1";
         document.body.classList.add("meadow");
         if (starEl) starEl.src = "stargreen.png";
+        setFavicon("favicon-green.ico");
         VIZ_COLORS = VIZ_GREEN;
         if (gradient) resize();
 
@@ -914,6 +924,7 @@
         meadowEl.style.opacity = "0";
         document.body.classList.remove("meadow");
         if (starEl) starEl.src = "star.png";
+        setFavicon("favicon.ico");
         VIZ_COLORS = VIZ_ORANGE;
         if (gradient) resize();
 
