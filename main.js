@@ -22,13 +22,15 @@ function setFavicon(href) {
   document.head.appendChild(l);
 }
 
-let meadowSrc = null;
 const meadowTrack = document.getElementById("meadowtrack");
+const aeroTrack = document.getElementById("aerotrack");
+const aeroEl = document.getElementById("aero");
 
 function syncVolume() {
   const v = volume.value / 100;
   track.volume = v;
-  meadowTrack.volume = v;
+  if (meadowTrack) meadowTrack.volume = v;
+  if (aeroTrack) aeroTrack.volume = v;
   if (gainNode) gainNode.gain.value = v;
   whoosh.volume = Math.min(1, v * 2.8);
   volumeUi.dataset.level = v === 0 ? "0" : v < 0.5 ? "1" : "2";
@@ -49,6 +51,7 @@ function debounce(fn, ms) {
 const ctx = canvas.getContext("2d");
 const VIZ_ORANGE = ["#ffffff", "#fff2dc", "#ffc078"];
 const VIZ_GREEN = ["#ffffff", "#e2ffd4", "#5cc93a"];
+const VIZ_BLUE = ["#ffffff", "#d9f0ff", "#3ba7ff"];
 let VIZ_COLORS = VIZ_ORANGE;
 let analyser, bins, gradient, W, H;
 
@@ -106,6 +109,7 @@ function startSpectrum() {
     source.connect(gainNode);
     gainNode.connect(analyser);
     analyser.connect(audio.destination);
+    routed.add(track);
     audio.resume();
 
     bins = new Uint8Array(analyser.frequencyBinCount);
@@ -239,20 +243,34 @@ const starEl = document.querySelector(".wordmark .star");
 const meadowEl = document.getElementById("meadow");
 const buddyEl = document.getElementById("buddy");
 let meadowMode = false;
+const MODES = ["orange", "meadow", "aero"];
+let modeIndex = 0;
+const routed = new Set();
 let titleFrames = ["civx"];
 let buddyAnim = null;
 
 let buddyX = null;
+let buddyFacing = 1;
+let buddyDragging = false;
+
+function setBuddyTransform(extra) {
+  if (!buddyEl) return;
+  buddyEl.style.transform = "scaleX(" + buddyFacing + ")" + (extra || "");
+}
 
 function walkBuddy() {
+  if (!buddyEl) return;
   if (buddyAnim) clearTimeout(buddyAnim);
+  if (buddyDragging) return;
+
   const minX = window.innerWidth * 0.35;
   const maxX = window.innerWidth * 0.62;
   const targetX = minX + Math.random() * (maxX - minX);
   const nowX = buddyEl.getBoundingClientRect().left;
 
   if (Math.abs(targetX - nowX) > 6) {
-    buddyEl.style.transform = targetX > nowX ? "scaleX(-1)" : "scaleX(1)";
+    buddyFacing = targetX > nowX ? -1 : 1;
+    setBuddyTransform();
   }
   buddyX = targetX;
 
@@ -262,45 +280,169 @@ function walkBuddy() {
   buddyAnim = setTimeout(walkBuddy, dur * 1000 + 600 + Math.random() * 2000);
 }
 
-function toggleMeadow() {
-  meadowMode = !meadowMode;
-  if (meadowMode) {
-    document.getElementById("bg").style.opacity = "0";
-    meadowEl.style.opacity = "1";
-    document.body.classList.add("meadow");
-    if (starEl) starEl.src = "stargreen.png";
-    setFavicon("favicon-green.ico");
-    VIZ_COLORS = VIZ_GREEN;
-    if (gradient) resize();
-    titleFrames = buildTitleFrames(TITLE_MEADOW);
+let grabDX = 0;
+let grabDY = 0;
+let lastPointerX = 0;
 
-    track.pause();
-    if (audioCtx && gainNode && !meadowSrc) {
-      try {
-        meadowSrc = audioCtx.createMediaElementSource(meadowTrack);
-        meadowSrc.connect(gainNode);
-      } catch (e) { }
-    }
-    meadowTrack.play().catch(() => { });
-    buddyX = window.innerWidth * 0.5;
-    buddyEl.style.left = buddyX + "px";
-    buddyEl.style.transform = "scaleX(1)";
-    buddyEl.style.transition = "opacity 0.6s ease";
-    walkBuddy();
-  } else {
-    document.getElementById("bg").style.opacity = "1";
-    meadowEl.style.opacity = "0";
-    document.body.classList.remove("meadow");
-    if (starEl) starEl.src = "star.png";
-    setFavicon("favicon.ico");
-    VIZ_COLORS = VIZ_ORANGE;
-    if (gradient) resize();
-    titleFrames = buildTitleFrames(TITLE_ORANGE);
+if (buddyEl) buddyEl.addEventListener("pointerdown", e => {
+  if (!meadowMode) return;
+  e.preventDefault();
 
-    meadowTrack.pause();
-    track.play().catch(() => { });
-    if (buddyAnim) { clearTimeout(buddyAnim); buddyAnim = null; }
+  buddyDragging = true;
+  if (buddyAnim) { clearTimeout(buddyAnim); buddyAnim = null; }
+
+  const r = buddyEl.getBoundingClientRect();
+
+  buddyEl.style.transition = "none";
+  buddyEl.style.bottom = "auto";
+  buddyEl.style.left = r.left + "px";
+  buddyEl.style.top = r.top + "px";
+  void buddyEl.offsetWidth;
+
+  grabDX = e.clientX - r.left;
+  grabDY = e.clientY - r.top;
+  lastPointerX = e.clientX;
+  buddyX = r.left;
+
+  buddyEl.classList.add("dragging");
+  buddyEl.style.transition = "opacity 0.6s ease";
+  setBuddyTransform(" scale(1.12) rotate(-3deg)");
+  buddyEl.setPointerCapture(e.pointerId);
+});
+
+if (buddyEl) buddyEl.addEventListener("pointermove", e => {
+  if (!buddyDragging) return;
+
+  const w = buddyEl.offsetWidth;
+  const h = buddyEl.offsetHeight;
+  const x = Math.max(0, Math.min(window.innerWidth - w, e.clientX - grabDX));
+  const y = Math.max(0, Math.min(window.innerHeight - h, e.clientY - grabDY));
+
+  if (Math.abs(e.clientX - lastPointerX) > 3) {
+    buddyFacing = e.clientX > lastPointerX ? -1 : 1;
+    lastPointerX = e.clientX;
   }
+
+  buddyEl.style.left = x + "px";
+  buddyEl.style.top = y + "px";
+  buddyX = x;
+  setBuddyTransform(" scale(1.12) rotate(-3deg)");
+});
+
+function buddyGroundTop() {
+  return window.innerHeight * 0.72 - (buddyEl ? buddyEl.offsetHeight : 0);
+}
+
+function dropBuddy(e) {
+  if (!buddyEl || !buddyDragging) return;
+  buddyDragging = false;
+  buddyEl.classList.remove("dragging");
+
+  if (e && e.pointerId !== undefined) {
+    try { buddyEl.releasePointerCapture(e.pointerId); } catch (err) { }
+  }
+
+  const groundY = buddyGroundTop();
+  const currentY = parseFloat(buddyEl.style.top) || groundY;
+  const distance = Math.abs(groundY - currentY);
+  const fall = Math.min(0.8, 0.2 + distance / 1100);
+
+  buddyEl.style.transition =
+    "top " + fall + "s cubic-bezier(0.5, 0, 0.9, 0.55), transform 0.25s ease-out, opacity 0.6s ease";
+  setBuddyTransform(" scale(1)");
+  buddyEl.style.top = groundY + "px";
+
+  setTimeout(() => {
+    if (buddyDragging) return;
+    buddyEl.style.transition = "transform 0.14s ease-out, opacity 0.6s ease";
+    setBuddyTransform(" scale(1.12, 0.86)");
+    setTimeout(() => {
+      if (buddyDragging) return;
+      buddyEl.style.transition = "transform 0.22s cubic-bezier(0.22, 1.3, 0.4, 1), opacity 0.6s ease";
+      setBuddyTransform(" scale(1)");
+    }, 130);
+  }, fall * 1000);
+
+  if (meadowMode) buddyAnim = setTimeout(walkBuddy, fall * 1000 + 900);
+}
+
+if (buddyEl) {
+  buddyEl.addEventListener("pointerup", dropBuddy);
+  buddyEl.addEventListener("pointercancel", dropBuddy);
+}
+
+function routeAudio(el) {
+  if (!audioCtx || !gainNode || routed.has(el)) return;
+  try {
+    audioCtx.createMediaElementSource(el).connect(gainNode);
+    routed.add(el);
+  } catch (e) { }
+}
+
+function stopBuddy() {
+  if (!buddyEl) return;
+  if (buddyAnim) { clearTimeout(buddyAnim); buddyAnim = null; }
+  buddyDragging = false;
+  buddyEl.classList.remove("dragging");
+}
+
+function startBuddy() {
+  if (!buddyEl) return;
+  buddyX = window.innerWidth * 0.5;
+  buddyEl.style.left = buddyX + "px";
+  buddyEl.style.top = "";
+  buddyEl.style.bottom = "";
+  buddyFacing = 1;
+  setBuddyTransform();
+  buddyEl.style.transition = "opacity 0.6s ease";
+  walkBuddy();
+}
+
+function applyMode(next) {
+  modeIndex = next;
+  const name = MODES[modeIndex];
+  meadowMode = name === "meadow";
+
+  document.getElementById("bg").style.opacity = name === "orange" ? "1" : "0";
+  if (meadowEl) meadowEl.style.opacity = name === "meadow" ? "1" : "0";
+  if (aeroEl) aeroEl.style.opacity = name === "aero" ? "1" : "0";
+
+  document.body.classList.toggle("meadow", name === "meadow");
+  document.body.classList.toggle("aero", name === "aero");
+
+  if (starEl) {
+    starEl.src = name === "meadow" ? "stargreen.png"
+      : name === "aero" ? "starblue.png"
+        : "star.png";
+  }
+
+  setFavicon(name === "meadow" ? "favicon-green.ico"
+    : name === "aero" ? "favicon-blue.ico"
+      : "favicon.ico");
+
+  VIZ_COLORS = name === "meadow" ? VIZ_GREEN
+    : name === "aero" ? VIZ_BLUE
+      : VIZ_ORANGE;
+  if (gradient) resize();
+
+  titleFrames = buildTitleFrames(name === "meadow" ? TITLE_MEADOW
+    : name === "aero" ? TITLE_AERO
+      : TITLE_ORANGE);
+
+  [track, meadowTrack, aeroTrack].forEach(a => { if (a) a.pause(); });
+
+  const playing = name === "meadow" ? meadowTrack : name === "aero" ? aeroTrack : track;
+  if (playing) {
+    routeAudio(playing);
+    playing.play().catch(() => { });
+  }
+
+  if (name === "meadow") startBuddy();
+  else stopBuddy();
+}
+
+function toggleMeadow() {
+  applyMode((modeIndex + 1) % MODES.length);
 }
 
 if (starEl) {
@@ -311,7 +453,10 @@ if (starEl) {
     whoosh.currentTime = 0;
     whoosh.play().catch(() => { });
 
-    BOMB_ACCENT = meadowMode ? "#f59409" : "#14b51f";
+    const nextName = MODES[(modeIndex + 1) % MODES.length];
+    BOMB_ACCENT = nextName === "meadow" ? "#14b51f"
+      : nextName === "aero" ? "#1e90ff"
+        : "#f59409";
 
     const nb = document.createElement("canvas");
     nb.setAttribute("aria-hidden", "true");
@@ -335,9 +480,13 @@ if (starEl) {
       if (si < list.length) {
         requestAnimationFrame(step);
       } else {
-        toggleMeadow();
         setTimeout(() => { nb.style.opacity = "0"; }, 300);
         setTimeout(() => nb.remove(), 900);
+        try {
+          toggleMeadow();
+        } catch (err) {
+          console.error("mode switch failed:", err);
+        }
       }
     })();
   });
@@ -372,6 +521,7 @@ window.addEventListener("resize", debounce(fillTickers, 200));
 
 const TITLE_ORANGE = { text: "civx", mark: "\☀️", hold: 5 };
 const TITLE_MEADOW = { text: "civx", mark: "\🌱", hold: 5 };
+const TITLE_AERO = { text: "civx", mark: "💧", hold: 5 };
 
 function buildTitleFrames(cfg) {
   const f = [];
